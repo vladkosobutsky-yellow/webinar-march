@@ -35,6 +35,10 @@ def _apply_floordiv(a: int | float, b: int | float) -> int | float:
     return a // b
 
 
+def _apply_mod(a: int | float, b: int | float) -> int | float:
+    return a % b
+
+
 def _apply_pow(a: int | float, b: int | float) -> int | float:
     return a**b
 
