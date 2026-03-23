@@ -3,24 +3,59 @@
 from __future__ import annotations
 
 import ast
-import operator
 import sys
-from typing import Any
+from collections.abc import Callable
 
 
-_ALLOWED_BINOPS: dict[type[ast.operator], Any] = {
-    ast.Add: operator.add,
-    ast.Sub: operator.sub,
-    ast.Mult: operator.mul,
-    ast.Div: operator.truediv,
-    ast.FloorDiv: operator.floordiv,
-    ast.Mod: operator.mod,
-    ast.Pow: operator.pow,
+def _apply_uadd(x: int | float) -> int | float:
+    return +x
+
+
+def _apply_usub(x: int | float) -> int | float:
+    return -x
+
+
+def _apply_add(a: int | float, b: int | float) -> int | float:
+    return a + b
+
+
+def _apply_sub(a: int | float, b: int | float) -> int | float:
+    return a - b
+
+
+def _apply_mul(a: int | float, b: int | float) -> int | float:
+    return a * b
+
+
+def _apply_truediv(a: int | float, b: int | float) -> int | float:
+    return a / b
+
+
+def _apply_floordiv(a: int | float, b: int | float) -> int | float:
+    return a // b
+
+
+def _apply_mod(a: int | float, b: int | float) -> int | float:
+    return a % b
+
+
+def _apply_pow(a: int | float, b: int | float) -> int | float:
+    return a**b
+
+
+_ALLOWED_UNARYOPS: dict[type[ast.unaryop], Callable[[int | float], int | float]] = {
+    ast.UAdd: _apply_uadd,
+    ast.USub: _apply_usub,
 }
 
-_ALLOWED_UNARYOPS: dict[type[ast.unaryop], Any] = {
-    ast.UAdd: operator.pos,
-    ast.USub: operator.neg,
+_ALLOWED_BINOPS: dict[type[ast.operator], Callable[[int | float, int | float], int | float]] = {
+    ast.Add: _apply_add,
+    ast.Sub: _apply_sub,
+    ast.Mult: _apply_mul,
+    ast.Div: _apply_truediv,
+    ast.FloorDiv: _apply_floordiv,
+    ast.Mod: _apply_mod,
+    ast.Pow: _apply_pow,
 }
 
 
@@ -50,7 +85,7 @@ def _eval_node(node: ast.AST) -> int | float:
     raise ValueError(f"disallowed expression: {ast.dump(node, annotate_fields=False)}")
 
 
-def main() -> None:
+def main() -> None:  # pragma: no cover
     if sys.stdin.isatty():
         raw = input("Expression: ").strip()
     else:
@@ -69,5 +104,5 @@ def main() -> None:
     print(result)
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     main()
