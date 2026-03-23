@@ -41,6 +41,15 @@ def test_disallowed_bool_constant() -> None:
         evaluate_expression("True")
 
 
+def test_subtraction() -> None:
+    assert evaluate_expression("10 - 3") == 7
+
+
+def test_disallowed_string_constant() -> None:
+    with pytest.raises(ValueError, match="disallowed constant"):
+        evaluate_expression("'hello'")
+
+
 def test_syntax_error_propagates() -> None:
     with pytest.raises(SyntaxError):
         evaluate_expression("1 +")
