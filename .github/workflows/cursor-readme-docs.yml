@@ -1,0 +1,125 @@
+# On push to main when app/ or pyproject.toml changes: run the Cursor CLI agent
+# with the push git diff and instructions to refresh README.md, then open a PR.
+# See: https://cursor.com/docs/cli/github-actions
+#
+# Setup:
+#   - CURSOR_API_KEY (Cursor dashboard).
+#   - GH_PR_TOKEN (optional): same as cursor-missing-tests.yml.
+
+name: Cursor CLI — README sync
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "app/**"
+      - "pyproject.toml"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: cursor-readme-docs-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  sync-readme:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Prepare git diff and agent prompt
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+          AFTER_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if [ -z "${BEFORE_SHA:-}" ] || [ "${BEFORE_SHA}" = "0000000000000000000000000000000000000000" ]; then
+            if git rev-parse --verify "${AFTER_SHA}^" >/dev/null 2>&1; then
+              git diff --no-color "${AFTER_SHA}^" "${AFTER_SHA}" > code-diff.txt
+            else
+              git show --no-color --format="" "${AFTER_SHA}" > code-diff.txt
+            fi
+          else
+            git diff --no-color "${BEFORE_SHA}..${AFTER_SHA}" > code-diff.txt
+          fi
+          {
+            echo "The following **git diff** is from the push that triggered this workflow (changes under \`app/\` and/or \`pyproject.toml\`)."
+            echo ""
+            echo "Update **README.md** at the repository root so it stays accurate for users: behavior, CLI usage (\`uv run …\`), tests, project layout, and anything else readers need to know given these code changes."
+            echo "If the diff does not require any documentation change, leave README.md unchanged (the workflow will skip opening a PR)."
+            echo ""
+            echo "IMPORTANT — CI restrictions: Do not run git, gh, branch, commit, push, or open PRs. Do not edit files other than **README.md** at the repo root. The workflow will commit and open the PR."
+            echo ""
+            echo "## Git diff"
+            echo ""
+            echo '```diff'
+            cat code-diff.txt
+            echo '```'
+          } > cursor-agent-prompt.txt
+
+      - name: Install Cursor CLI
+        run: |
+          curl https://cursor.com/install -fsS | bash
+          echo "$HOME/.cursor/bin" >> "$GITHUB_PATH"
+
+      - name: Run Cursor agent (README only)
+        env:
+          CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CURSOR_API_KEY:-}" ]; then
+            echo "::error::CURSOR_API_KEY is not set. Add it under Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+          PROMPT="$(cat cursor-agent-prompt.txt)"
+          agent -p --force "$PROMPT"
+
+      - name: Commit and open PR
+        env:
+          GH_PR_TOKEN: ${{ secrets.GH_PR_TOKEN }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          BRANCH="cursor/sync-readme-${{ github.run_id }}-${{ github.run_attempt }}"
+          git checkout -B "$BRANCH"
+          git add README.md
+          if git diff --staged --quiet; then
+            echo "No changes to README.md; skipping PR."
+            exit 0
+          fi
+          git commit -m "docs: sync README with code"
+          git push -u origin "$BRANCH"
+          {
+            echo "## PR opened (or ready)"
+            echo "Branch: \`$BRANCH\`"
+            echo ""
+            echo "### Git diff (this push)"
+            echo ""
+            echo '```diff'
+            head -n 200 code-diff.txt
+            if [ "$(wc -l < code-diff.txt)" -gt 200 ]; then
+              echo ""
+              echo "... (truncated; full diff is in the agent prompt on the runner)"
+            fi
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "This PR was opened by [.github/workflows/cursor-readme-docs.yml](.github/workflows/cursor-readme-docs.yml) after a push to \`${GITHUB_REF_NAME}\`."
+            echo ""
+            echo "## Git diff (this push)"
+            echo ""
+            echo '```diff'
+            cat code-diff.txt
+            echo '```'
+          } > pr-body-readme.md
+          export GH_TOKEN="${GH_PR_TOKEN:-${GITHUB_TOKEN}}"
+          gh pr create \
+            --base "${GITHUB_REF_NAME}" \
+            --head "$BRANCH" \
+            --title "docs: sync README with code" \
+            --body-file pr-body-readme.md

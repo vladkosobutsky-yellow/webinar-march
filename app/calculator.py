@@ -35,10 +35,6 @@ def _apply_floordiv(a: int | float, b: int | float) -> int | float:
     return a // b
 
 
-def _apply_mod(a: int | float, b: int | float) -> int | float:
-    return a % b
-
-
 def _apply_pow(a: int | float, b: int | float) -> int | float:
     return a**b
 
@@ -54,7 +50,6 @@ _ALLOWED_BINOPS: dict[type[ast.operator], Callable[[int | float, int | float], i
     ast.Mult: _apply_mul,
     ast.Div: _apply_truediv,
     ast.FloorDiv: _apply_floordiv,
-    ast.Mod: _apply_mod,
     ast.Pow: _apply_pow,
 }
 
