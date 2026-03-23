@@ -11,7 +11,7 @@ The calculator accepts **integer and floating-point literals** and combines them
 | Kind | Operators | Notes |
 |------|-----------|--------|
 | Unary | `+`, `-` | e.g. `-5`, `+3.14` |
-| Binary | `+`, `-`, `*`, `/`, `//`, `**` | `/` is true division; `//` is floor division; `**` is exponentiation |
+| Binary | `+`, `-`, `*`, `/`, `//`, `%`, `**` | `/` is true division; `//` is floor division; `%` is modulo; `**` is exponentiation |
 
 Use **parentheses** to control order of operations (e.g. `(5 + 8) * 2`).
 
