@@ -50,6 +50,10 @@ def test_disallowed_string_constant() -> None:
         evaluate_expression("'hello'")
 
 
+def test_modulo() -> None:
+    assert evaluate_expression("10 % 3") == 1
+
+
 def test_syntax_error_propagates() -> None:
     with pytest.raises(SyntaxError):
         evaluate_expression("1 +")
