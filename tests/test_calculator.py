@@ -1,6 +1,6 @@
 import pytest
 
-from app.calculator import evaluate_expression
+from app.calculator import _apply_mod, evaluate_expression
 
 
 def test_basic_add_mult() -> None:
@@ -53,3 +53,8 @@ def test_disallowed_string_constant() -> None:
 def test_syntax_error_propagates() -> None:
     with pytest.raises(SyntaxError):
         evaluate_expression("1 +")
+
+
+def test_apply_mod() -> None:
+    assert _apply_mod(10, 3) == 1
+    assert _apply_mod(7, 2) == 1
