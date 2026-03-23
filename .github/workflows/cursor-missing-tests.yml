@@ -1,0 +1,102 @@
+# On push to main: if any app modules lack obvious pytest coverage, run the
+# Cursor CLI agent on the runner (restricted: tests/ only), then open a PR via
+# deterministic git + gh. See: https://cursor.com/docs/cli/github-actions
+#
+# Setup:
+#   - CURSOR_API_KEY (Cursor dashboard).
+#   - GH_PR_TOKEN (optional): classic PAT with repo scope, or fine-grained PAT with
+#     Contents + Pull requests write on this repo. Use when your org blocks
+#     GITHUB_TOKEN from creating PRs; git push still uses the default Actions token.
+
+name: Cursor CLI — missing tests
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: cursor-missing-tests-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  add-missing-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Install dev dependencies
+        run: uv sync --group dev
+
+      - name: Detect missing tests
+        id: missing
+        run: uv run python .github/scripts/check_missing_tests.py
+
+      - name: Install Cursor CLI
+        if: steps.missing.outputs.found == 'true'
+        run: |
+          curl https://cursor.com/install -fsS | bash
+          echo "$HOME/.cursor/bin" >> "$GITHUB_PATH"
+
+      - name: Run Cursor agent (tests only)
+        if: steps.missing.outputs.found == 'true'
+        env:
+          CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CURSOR_API_KEY:-}" ]; then
+            echo "::error::CURSOR_API_KEY is not set. Add it under Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+          PROMPT="$(cat cursor-agent-prompt.txt)"
+          agent -p --force "$PROMPT"
+
+      - name: Commit and open PR
+        if: steps.missing.outputs.found == 'true'
+        env:
+          GH_PR_TOKEN: ${{ secrets.GH_PR_TOKEN }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          BRANCH="cursor/add-missing-tests-${{ github.run_id }}-${{ github.run_attempt }}"
+          git checkout -B "$BRANCH"
+          git add tests/
+          if git diff --staged --quiet; then
+            echo "No changes under tests/; skipping PR."
+            exit 0
+          fi
+          git commit -m "test: add missing pytest coverage"
+          git push -u origin "$BRANCH"
+          {
+            echo "## PR opened (or ready)"
+            echo "Branch: \`$BRANCH\`"
+            echo ""
+            echo "### Flagged (heuristic and/or pytest-cov)"
+            cat missing-modules.txt
+            if [ -s coverage-report.txt ]; then
+              echo ""
+              echo "### pytest / coverage output (excerpt)"
+              tail -n 80 coverage-report.txt
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "This PR was opened by [.github/workflows/cursor-missing-tests.yml](.github/workflows/cursor-missing-tests.yml) after a push to \`${GITHUB_REF_NAME}\`."
+            echo ""
+            echo "**Why this PR was opened:**"
+            echo ""
+            cat missing-modules.txt
+            echo ""
+            echo "See \`coverage-report.txt\` on the branch for full pytest/pytest-cov output when coverage failed."
+          } > pr-body.md
+          export GH_TOKEN="${GH_PR_TOKEN:-${GITHUB_TOKEN}}"
+          gh pr create \
+            --base "${GITHUB_REF_NAME}" \
+            --head "$BRANCH" \
+            --title "test: add missing pytest coverage" \
+            --body-file pr-body.md

@@ -6,3 +6,12 @@ venv/
 env/
 
 .pytest_cache/
+
+.coverage
+coverage.json
+htmlcov/
+
+# Local runs of .github/scripts/check_missing_tests.py when modules lack tests
+coverage-report.txt
+cursor-agent-prompt.txt
+missing-modules.txt
